@@ -1,5 +1,6 @@
 "use client";
 
+import type { FormEvent, ChangeEvent } from 'react';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -7,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { EnvelopeIcon, KeyIcon, ArrowLeftIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { useSurprise } from '@/hooks/useSurprise';
+import { supabase } from '@/lib/supabase';
 
 export default function Login() {
   const router = useRouter();
@@ -21,15 +23,15 @@ export default function Login() {
   const { signIn, loading, error } = useAuth();
   const { createSurprise } = useSurprise();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     try {
       const authData = await signIn(formData.email, formData.password);
       
       if (authData?.user) {
-        // Aguardar a autenticação ser completada
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Aguardar a autenticação ser completamente estabelecida
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Verificar se há dados temporários da surpresa
         const tempSurpriseStr = localStorage.getItem('tempSurprise');
@@ -38,6 +40,12 @@ export default function Login() {
           try {
             const tempSurprise = JSON.parse(tempSurpriseStr);
             console.log('Dados temporários encontrados:', tempSurprise);
+            
+            // Verificar novamente a autenticação antes de criar a surpresa
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) {
+              throw new Error('Sessão não estabelecida');
+            }
             
             // Criar a surpresa com os dados temporários
             const surprise = await createSurprise({
@@ -60,7 +68,6 @@ export default function Login() {
             }
           } catch (err) {
             console.error('Erro ao criar surpresa após login:', err);
-            // Em caso de erro, manter os dados temporários
             router.push('/create');
             return;
           }
@@ -72,6 +79,10 @@ export default function Login() {
     } catch (err) {
       console.error('Erro no login:', err);
     }
+  };
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>, field: 'email' | 'password') => {
+    setFormData(prev => ({ ...prev, [field]: e.target.value }));
   };
 
   return (
@@ -101,7 +112,7 @@ export default function Login() {
                   type="email"
                   placeholder="Seu e-mail"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => handleInputChange(e, 'email')}
                   onFocus={() => setFocused('email')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -119,7 +130,7 @@ export default function Login() {
                   type="password"
                   placeholder="Sua senha"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) => handleInputChange(e, 'password')}
                   onFocus={() => setFocused('password')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"

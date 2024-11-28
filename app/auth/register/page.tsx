@@ -1,5 +1,6 @@
 "use client";
 
+import type { FormEvent, ChangeEvent } from 'react';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -7,6 +8,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { EnvelopeIcon, KeyIcon, UserIcon, ArrowLeftIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { useSurprise } from '@/hooks/useSurprise';
+import { supabase } from '@/lib/supabase';
+
+type FormFields = 'name' | 'email' | 'password' | 'confirmPassword';
 
 export default function Register() {
   const router = useRouter();
@@ -23,30 +27,55 @@ export default function Register() {
   const { signUp, loading, error } = useAuth();
   const { createSurprise } = useSurprise();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (formData.password !== formData.confirmPassword) {
       return;
     }
 
-    const data = await signUp(formData.email, formData.password, formData.name);
-    if (data) {
-      // Se houver uma surpresa temporária e estiver indo para pagamento
-      const tempSurprise = localStorage.getItem('tempSurprise');
-      if (tempSurprise && returnUrl === '/payment') {
-        // Criar a surpresa antes de redirecionar
-        const surpriseData = JSON.parse(tempSurprise);
-        const surprise = await createSurprise(surpriseData);
-        if (surprise) {
-          localStorage.removeItem('tempSurprise');
-          router.push('/payment');
-          return;
-        }
-      }
+    try {
+      const data = await signUp(formData.email, formData.password, formData.name);
       
-      router.push(returnUrl);
+      if (data) {
+        // Aguardar a autenticação ser completamente estabelecida
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Se houver uma surpresa temporária e estiver indo para pagamento
+        const tempSurprise = localStorage.getItem('tempSurprise');
+        if (tempSurprise && returnUrl === '/payment') {
+          try {
+            // Verificar novamente a autenticação antes de criar a surpresa
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) {
+              throw new Error('Sessão não estabelecida');
+            }
+
+            // Criar a surpresa antes de redirecionar
+            const surpriseData = JSON.parse(tempSurprise);
+            const surprise = await createSurprise(surpriseData);
+            
+            if (surprise) {
+              localStorage.removeItem('tempSurprise');
+              router.push('/payment');
+              return;
+            }
+          } catch (err) {
+            console.error('Erro ao criar surpresa após registro:', err);
+            router.push('/create');
+            return;
+          }
+        }
+        
+        router.push(returnUrl);
+      }
+    } catch (err) {
+      // ... error handling ...
     }
+  };
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>, field: FormFields) => {
+    setFormData(prev => ({ ...prev, [field]: e.target.value }));
   };
 
   return (
@@ -76,7 +105,7 @@ export default function Register() {
                   type="text"
                   placeholder="Seu nome"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => handleInputChange(e, 'name')}
                   onFocus={() => setFocused('name')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -94,7 +123,7 @@ export default function Register() {
                   type="email"
                   placeholder="Seu e-mail"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => handleInputChange(e, 'email')}
                   onFocus={() => setFocused('email')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -112,7 +141,7 @@ export default function Register() {
                   type="password"
                   placeholder="Sua senha"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) => handleInputChange(e, 'password')}
                   onFocus={() => setFocused('password')}
                   onBlur={() => setFocused(null)}
                   className={`w-full pl-12 pr-4 py-3 bg-navy-900 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all ${
@@ -133,7 +162,7 @@ export default function Register() {
                   type="password"
                   placeholder="Confirme sua senha"
                   value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  onChange={(e) => handleInputChange(e, 'confirmPassword')}
                   onFocus={() => setFocused('confirmPassword')}
                   onBlur={() => setFocused(null)}
                   className={`w-full pl-12 pr-4 py-3 bg-navy-900 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all ${
