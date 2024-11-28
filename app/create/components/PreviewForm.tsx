@@ -8,6 +8,7 @@ import { useUser } from '@/hooks/useUser';
 import TimeCounter from '@/app/preview/components/TimeCounter';
 import HeartRain from '@/app/preview/components/HeartRain';
 import ImageSlideshow from '@/components/ImageSlideshow';
+import { tempStorage } from '@/utils/storage';
 
 interface PreviewFormProps {
   data: {
@@ -29,7 +30,10 @@ export default function PreviewForm({ data, onBack, onSave }: PreviewFormProps) 
 
   const handleSaveAndContinue = async () => {
     try {
-      // Salvar dados temporários
+      // Salvar arquivos no IndexedDB
+      const fileIds = await tempStorage.saveFiles(data.photos);
+
+      // Salvar metadados no localStorage
       const serializableSurprise = {
         coupleName: data.coupleName,
         startDate: data.startDate,
@@ -37,10 +41,9 @@ export default function PreviewForm({ data, onBack, onSave }: PreviewFormProps) 
         youtubeLink: data.youtubeLink || '',
         plan: data.plan || 'basic',
         previewUrls: data.previewUrls || [],
-        photos: data.photos || []
+        fileIds: fileIds // Salvar apenas os IDs dos arquivos
       };
       
-      // Salvar no localStorage antes de qualquer outra ação
       localStorage.setItem('tempSurprise', JSON.stringify(serializableSurprise));
       console.log('Dados temporários salvos:', serializableSurprise);
 

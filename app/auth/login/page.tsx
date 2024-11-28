@@ -9,6 +9,7 @@ import { EnvelopeIcon, KeyIcon, ArrowLeftIcon, ExclamationCircleIcon } from '@he
 import { useAuth } from '@/hooks/useAuth';
 import { useSurprise } from '@/hooks/useSurprise';
 import { supabase } from '@/lib/supabase';
+import { tempStorage } from '@/utils/storage';
 
 export default function Login() {
   const router = useRouter();
@@ -30,21 +31,17 @@ export default function Login() {
       const authData = await signIn(formData.email, formData.password);
       
       if (authData?.user) {
-        // Aguardar a autenticação ser completamente estabelecida
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Verificar se há dados temporários da surpresa
         const tempSurpriseStr = localStorage.getItem('tempSurprise');
         
         if (tempSurpriseStr && returnUrl.includes('/payment')) {
           try {
-            // Verificar novamente a autenticação
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) {
               console.log('Sessão não estabelecida, aguardando...');
               await new Promise(resolve => setTimeout(resolve, 2000));
               
-              // Verificar mais uma vez
               const { data: { session: retrySession } } = await supabase.auth.getSession();
               if (!retrySession?.user) {
                 throw new Error('Sessão não estabelecida após retry');
@@ -54,20 +51,22 @@ export default function Login() {
             const tempSurprise = JSON.parse(tempSurpriseStr);
             console.log('Dados temporários encontrados:', tempSurprise);
             
-            // Criar a surpresa com os dados temporários
+            const photos = await tempStorage.getFiles(tempSurprise.fileIds);
+            
             const surprise = await createSurprise({
               coupleName: tempSurprise.coupleName,
               startDate: tempSurprise.startDate,
               message: tempSurprise.message,
               youtubeLink: tempSurprise.youtubeLink || '',
               plan: tempSurprise.plan || 'basic',
-              photos: tempSurprise.photos || [],
+              photos: photos,
               status: 'draft'
             });
 
             if (surprise?.id) {
               console.log('Surpresa criada com sucesso:', surprise.id);
               localStorage.removeItem('tempSurprise');
+              await tempStorage.clearAll();
               router.push(`/payment?surpriseId=${surprise.id}`);
               return;
             } else {
