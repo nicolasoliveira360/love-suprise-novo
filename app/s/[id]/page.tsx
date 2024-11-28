@@ -12,6 +12,7 @@ import HeartRain from '@/app/create/components/HeartRain';
 import ImageSlideshow from '@/components/ImageSlideshow';
 import ShareModal from './components/ShareModal';
 import { createNotification } from '@/lib/notifications';
+import { extractYoutubeVideoId } from '@/utils/youtube';
 
 interface SurpriseData {
   id: string;
@@ -272,7 +273,7 @@ export default function SurprisePage() {
                   <iframe
                     width="100%"
                     height="100%"
-                    src={`https://www.youtube.com/embed/${surprise.youtube_link.split('v=')[1]}?autoplay=1&rel=0&showinfo=0&modestbranding=1`}
+                    src={`https://www.youtube.com/embed/${extractYoutubeVideoId(surprise.youtube_link)}?autoplay=1&rel=0&showinfo=0&modestbranding=1`}
                     title="YouTube video player"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen

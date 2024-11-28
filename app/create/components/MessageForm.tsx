@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { HeartIcon, MusicalNoteIcon } from '@heroicons/react/24/solid';
+import { extractYoutubeVideoId } from '@/utils/youtube';
 
 interface MessageFormProps {
   onSubmit: (data: { message: string; youtubeLink?: string }) => void;
@@ -20,7 +21,15 @@ export default function MessageForm({ onSubmit, initialData, isPremium, onBack }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+
+    // Normalizar o link do YouTube antes de salvar
+    const youtubeId = formData.youtubeLink ? extractYoutubeVideoId(formData.youtubeLink) : null;
+    const normalizedYoutubeLink = youtubeId ? `https://youtube.com/watch?v=${youtubeId}` : '';
+
+    onSubmit({
+      message: formData.message,
+      youtubeLink: normalizedYoutubeLink
+    });
   };
 
   return (
