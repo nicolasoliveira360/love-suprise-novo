@@ -9,8 +9,7 @@ import { EnvelopeIcon, KeyIcon, UserIcon, ArrowLeftIcon, ExclamationCircleIcon }
 import { useAuth } from '@/hooks/useAuth';
 import { useSurprise } from '@/hooks/useSurprise';
 import { supabase } from '@/lib/supabase';
-
-type FormFields = 'name' | 'email' | 'password' | 'confirmPassword';
+import { tempStorage } from '@/utils/storage';
 
 export default function Register() {
   const router = useRouter();
@@ -42,22 +41,43 @@ export default function Register() {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Se houver uma surpresa temporária e estiver indo para pagamento
-        const tempSurprise = localStorage.getItem('tempSurprise');
-        if (tempSurprise && returnUrl === '/payment') {
+        const tempSurpriseStr = localStorage.getItem('tempSurprise');
+        
+        if (tempSurpriseStr) {
           try {
             // Verificar novamente a autenticação antes de criar a surpresa
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) {
-              throw new Error('Sessão não estabelecida');
+              console.log('Sessão não estabelecida, aguardando...');
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              const { data: { session: retrySession } } = await supabase.auth.getSession();
+              if (!retrySession?.user) {
+                throw new Error('Sessão não estabelecida após retry');
+              }
             }
 
-            // Criar a surpresa antes de redirecionar
-            const surpriseData = JSON.parse(tempSurprise);
-            const surprise = await createSurprise(surpriseData);
+            const tempSurprise = JSON.parse(tempSurpriseStr);
+            console.log('Dados temporários encontrados:', tempSurprise);
+
+            // Recuperar arquivos do IndexedDB
+            const photos = await tempStorage.getFiles(tempSurprise.fileIds);
+            
+            const surprise = await createSurprise({
+              coupleName: tempSurprise.coupleName,
+              startDate: tempSurprise.startDate,
+              message: tempSurprise.message,
+              youtubeLink: tempSurprise.youtubeLink || '',
+              plan: tempSurprise.plan || 'basic',
+              photos: photos,
+              status: 'draft'
+            });
             
             if (surprise) {
+              console.log('Surpresa criada com sucesso:', surprise.id);
               localStorage.removeItem('tempSurprise');
-              router.push('/payment');
+              await tempStorage.clearAll(); // Limpar arquivos temporários
+              router.push(`/payment?surpriseId=${surprise.id}`);
               return;
             }
           } catch (err) {
@@ -70,32 +90,33 @@ export default function Register() {
         router.push(returnUrl);
       }
     } catch (err) {
-      // ... error handling ...
+      console.error('Erro no registro:', err);
     }
   };
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>, field: FormFields) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>, field: keyof typeof formData) => {
     setFormData(prev => ({ ...prev, [field]: e.target.value }));
   };
 
   return (
     <div className="min-h-screen bg-navy-900 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <Link 
-          href="/" 
+        <button 
+          onClick={() => router.back()}
           className="flex items-center gap-2 text-white hover:text-pink-500 transition-colors mb-8"
         >
           <ArrowLeftIcon className="w-5 h-5" />
-          <span>Voltar para home</span>
-        </Link>
+          <span>Voltar</span>
+        </button>
 
         <div className="bg-navy-800 rounded-2xl p-6 sm:p-8 shadow-neon-pink">
           <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold mb-2">Criar sua conta</h1>
-            <p className="text-gray-400">Registre-se para começar</p>
+            <h1 className="text-2xl font-bold mb-2">Criar Conta</h1>
+            <p className="text-gray-400">Comece a criar suas surpresas</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Nome */}
             <div className={`relative transition-all ${
               focused === 'name' ? 'scale-105' : ''
             }`}>
@@ -105,7 +126,7 @@ export default function Register() {
                   type="text"
                   placeholder="Seu nome"
                   value={formData.name}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'name')}
+                  onChange={(e) => handleInputChange(e, 'name')}
                   onFocus={() => setFocused('name')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -114,6 +135,7 @@ export default function Register() {
               </div>
             </div>
 
+            {/* Email */}
             <div className={`relative transition-all ${
               focused === 'email' ? 'scale-105' : ''
             }`}>
@@ -123,7 +145,7 @@ export default function Register() {
                   type="email"
                   placeholder="Seu e-mail"
                   value={formData.email}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'email')}
+                  onChange={(e) => handleInputChange(e, 'email')}
                   onFocus={() => setFocused('email')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -132,6 +154,7 @@ export default function Register() {
               </div>
             </div>
 
+            {/* Senha */}
             <div className={`relative transition-all ${
               focused === 'password' ? 'scale-105' : ''
             }`}>
@@ -141,18 +164,16 @@ export default function Register() {
                   type="password"
                   placeholder="Sua senha"
                   value={formData.password}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'password')}
+                  onChange={(e) => handleInputChange(e, 'password')}
                   onFocus={() => setFocused('password')}
                   onBlur={() => setFocused(null)}
-                  className={`w-full pl-12 pr-4 py-3 bg-navy-900 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all ${
-                    error ? 'border-red-500' : 'border-gray-700'
-                  }`}
+                  className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
                   required
-                  minLength={6}
                 />
               </div>
             </div>
 
+            {/* Confirmar Senha */}
             <div className={`relative transition-all ${
               focused === 'confirmPassword' ? 'scale-105' : ''
             }`}>
@@ -162,14 +183,11 @@ export default function Register() {
                   type="password"
                   placeholder="Confirme sua senha"
                   value={formData.confirmPassword}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'confirmPassword')}
+                  onChange={(e) => handleInputChange(e, 'confirmPassword')}
                   onFocus={() => setFocused('confirmPassword')}
                   onBlur={() => setFocused(null)}
-                  className={`w-full pl-12 pr-4 py-3 bg-navy-900 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all ${
-                    error ? 'border-red-500' : 'border-gray-700'
-                  }`}
+                  className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
                   required
-                  minLength={6}
                 />
               </div>
             </div>
@@ -185,9 +203,17 @@ export default function Register() {
               type="submit"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              disabled={loading}
               className="w-full py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-full font-semibold hover:opacity-90 transition-all shadow-neon-pink"
             >
-              Criar conta
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                  <span>Criando conta...</span>
+                </div>
+              ) : (
+                'Criar conta'
+              )}
             </motion.button>
           </form>
 

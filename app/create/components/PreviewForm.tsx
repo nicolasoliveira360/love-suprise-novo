@@ -9,6 +9,7 @@ import TimeCounter from '@/app/preview/components/TimeCounter';
 import HeartRain from '@/app/preview/components/HeartRain';
 import ImageSlideshow from '@/components/ImageSlideshow';
 import { tempStorage } from '@/utils/storage';
+import Link from 'next/link';
 
 interface PreviewFormProps {
   data: {

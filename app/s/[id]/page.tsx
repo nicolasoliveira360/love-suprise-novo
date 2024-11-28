@@ -3,13 +3,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'next/navigation';
-import { ChevronLeftIcon, ChevronRightIcon, HeartIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, EllipsisVerticalIcon, HeartIcon } from '@heroicons/react/24/outline';
+import { Menu } from '@headlessui/react';
+import Link from 'next/link';
 import { useSurprise } from '@/hooks/useSurprise';
 import TimeCounter from '@/app/create/components/TimeCounter';
 import HeartRain from '@/app/create/components/HeartRain';
 import ImageSlideshow from '@/components/ImageSlideshow';
-import ImageDisplay from '@/app/components/ImageDisplay';
-import Image from 'next/image';
+import ShareModal from './components/ShareModal';
 import { createNotification } from '@/lib/notifications';
 
 interface SurpriseData {
@@ -34,6 +35,7 @@ export default function SurprisePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   const loadSurprise = useCallback(async () => {
     if (!params.id || hasLoaded) return;
@@ -54,14 +56,19 @@ export default function SurprisePage() {
         photosCount: data.surprise_photos?.length || 0
       });
 
-      // Criar notificação de visualização
-      if (data.user_id) { // Certifique-se de que temos o user_id do criador
-        await createNotification({
-          userId: data.user_id,
-          surpriseId: data.id,
-          type: 'viewed',
-          message: `Sua surpresa "${data.couple_name}" foi visualizada!`
-        });
+      // Criar notificação de visualização apenas se houver user_id
+      try {
+        if (data.user_id) {
+          await createNotification({
+            userId: data.user_id,
+            surpriseId: data.id,
+            type: 'viewed',
+            message: `Sua surpresa "${data.couple_name}" foi visualizada!`
+          });
+        }
+      } catch (notificationError) {
+        // Se houver erro na notificação, apenas logamos e continuamos
+        console.warn('Erro ao criar notificação:', notificationError);
       }
 
       setSurprise(data as SurpriseData);
@@ -89,6 +96,30 @@ export default function SurprisePage() {
       return next;
     });
   }, [surprise?.surprise_photos]);
+
+  const handleShare = async (platform: 'whatsapp' | 'facebook' | 'instagram') => {
+    const url = window.location.href;
+    const text = `Veja essa surpresa especial: ${surprise?.couple_name}`;
+    
+    switch (platform) {
+      case 'whatsapp':
+        window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`);
+        break;
+      case 'facebook':
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
+        break;
+      case 'instagram':
+        // Instagram não tem API de compartilhamento direta, 
+        // então vamos copiar o link para a área de transferência
+        try {
+          await navigator.clipboard.writeText(url);
+          alert('Link copiado! Você pode compartilhar no Instagram.');
+        } catch (err) {
+          console.error('Erro ao copiar link:', err);
+        }
+        break;
+    }
+  };
 
   if (isLoading) {
     return (
@@ -123,14 +154,57 @@ export default function SurprisePage() {
   }
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="min-h-screen bg-gradient-to-b from-navy-900 via-purple-900/20 to-navy-900 py-8 sm:py-12"
-    >
+    <div className="min-h-screen bg-gradient-to-b from-navy-900 via-purple-900/20 to-navy-900">
       <HeartRain />
       
+      {/* Navbar não-fixa */}
+      <div className="bg-navy-900/90 backdrop-blur-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <Link href="/">
+              <button className="p-2 rounded-full bg-navy-800/80 hover:bg-navy-700 transition-colors">
+                <HomeIcon className="w-5 h-5 text-white" />
+              </button>
+            </Link>
+
+            <Menu as="div" className="relative">
+              <Menu.Button className="p-2 rounded-full bg-navy-800/80 hover:bg-navy-700 transition-colors">
+                <EllipsisVerticalIcon className="w-5 h-5 text-white" />
+              </Menu.Button>
+              <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right rounded-lg bg-navy-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                <div className="px-1 py-1">
+                  <Menu.Item>
+                    {({ active }) => (
+                      <button
+                        onClick={() => setIsShareModalOpen(true)}
+                        className={`${
+                          active ? 'bg-navy-700' : ''
+                        } group flex w-full items-center rounded-md px-2 py-2 text-sm text-white`}
+                      >
+                        Compartilhar
+                      </button>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <Link
+                        href="/create"
+                        className={`${
+                          active ? 'bg-navy-700' : ''
+                        } group flex w-full items-center rounded-md px-2 py-2 text-sm text-white`}
+                      >
+                        Criar minha surpresa
+                      </Link>
+                    )}
+                  </Menu.Item>
+                </div>
+              </Menu.Items>
+            </Menu>
+          </div>
+        </div>
+      </div>
+
+      {/* Conteúdo principal */}
       <div className="container mx-auto px-4">
         <div className="max-w-[375px] mx-auto space-y-8">
           {/* Nome do casal e contador */}
@@ -224,6 +298,13 @@ export default function SurprisePage() {
           </motion.div>
         </div>
       </div>
-    </motion.div>
+
+      {/* Modal de compartilhamento */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        onShare={handleShare}
+      />
+    </div>
   );
 } 

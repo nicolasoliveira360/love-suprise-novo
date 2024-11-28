@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { EnvelopeIcon, KeyIcon, ExclamationCircleIcon, UserIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type AuthFormProps = {
   onComplete: () => void;
@@ -19,6 +21,7 @@ export default function AuthForm({ onComplete, initialMode = true }: AuthFormPro
     email: '',
     password: '',
   });
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,7 +136,15 @@ export default function AuthForm({ onComplete, initialMode = true }: AuthFormPro
           onClick={() => setIsLogin(!isLogin)}
           className="text-pink-500 hover:text-pink-400 transition-colors text-sm"
         >
-          {isLogin ? 'Não tem uma conta? Criar conta' : 'Já tem uma conta? Entrar'}
+          {isLogin ? (
+            <Link href="/auth/register?returnUrl=/payment">
+              Não tem uma conta? Criar conta
+            </Link>
+          ) : (
+            <Link href="/auth/login?returnUrl=/payment">
+              Já tem uma conta? Entrar
+            </Link>
+          )}
         </button>
       </div>
     </div>
