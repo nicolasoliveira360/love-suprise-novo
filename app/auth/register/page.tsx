@@ -105,7 +105,7 @@ export default function Register() {
                   type="text"
                   placeholder="Seu nome"
                   value={formData.name}
-                  onChange={(e) => handleInputChange(e, 'name')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'name')}
                   onFocus={() => setFocused('name')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -123,7 +123,7 @@ export default function Register() {
                   type="email"
                   placeholder="Seu e-mail"
                   value={formData.email}
-                  onChange={(e) => handleInputChange(e, 'email')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'email')}
                   onFocus={() => setFocused('email')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -141,7 +141,7 @@ export default function Register() {
                   type="password"
                   placeholder="Sua senha"
                   value={formData.password}
-                  onChange={(e) => handleInputChange(e, 'password')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'password')}
                   onFocus={() => setFocused('password')}
                   onBlur={() => setFocused(null)}
                   className={`w-full pl-12 pr-4 py-3 bg-navy-900 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all ${
@@ -162,7 +162,7 @@ export default function Register() {
                   type="password"
                   placeholder="Confirme sua senha"
                   value={formData.confirmPassword}
-                  onChange={(e) => handleInputChange(e, 'confirmPassword')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'confirmPassword')}
                   onFocus={() => setFocused('confirmPassword')}
                   onBlur={() => setFocused(null)}
                   className={`w-full pl-12 pr-4 py-3 bg-navy-900 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all ${

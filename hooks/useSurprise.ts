@@ -178,12 +178,19 @@ export function useSurprise() {
       setLoading(true);
       setError(null);
 
-      // Verificar autenticação
+      // Verificar autenticação e aguardar sessão
       const { data: { session } } = await supabase.auth.getSession();
+      
+      // Se não houver sessão, retornar null sem erro
       if (!session?.user?.id) {
-        throw new Error('Usuário não autenticado');
+        console.log('Usuário não autenticado, retornando sem erro');
+        return null;
       }
 
+      // Aguardar um momento para garantir que a sessão está estabelecida
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      console.log('Iniciando criação da surpresa com usuário:', session.user.id);
       console.log('Iniciando upload de', data.photos?.length || 0, 'fotos');
 
       // Usar generateId em vez de crypto.randomUUID
@@ -220,7 +227,7 @@ export function useSurprise() {
         .from('surprises')
         .insert({
           id: surpriseId,
-          user_id: user.id, // Usar o ID verificado
+          user_id: session.user.id, // Usar o ID verificado da sessão
           couple_name: data.coupleName,
           start_date: data.startDate,
           message: data.message,

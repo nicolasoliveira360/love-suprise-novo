@@ -28,11 +28,34 @@ export default function PreviewForm({ data, onBack, onSave }: PreviewFormProps) 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const handleSaveAndContinue = async () => {
-    if (!user) {
+    try {
+      // Salvar dados temporários
+      const serializableSurprise = {
+        coupleName: data.coupleName,
+        startDate: data.startDate,
+        message: data.message,
+        youtubeLink: data.youtubeLink || '',
+        plan: data.plan || 'basic',
+        previewUrls: data.previewUrls || [],
+        photos: data.photos || []
+      };
+      
+      // Salvar no localStorage antes de qualquer outra ação
+      localStorage.setItem('tempSurprise', JSON.stringify(serializableSurprise));
+      console.log('Dados temporários salvos:', serializableSurprise);
+
+      // Se não houver usuário, redirecionar para autenticação
+      if (!user) {
+        router.push('/auth/login?returnUrl=/payment');
+        return;
+      }
+
+      // Se houver usuário, prosseguir com a criação
       onSave();
-      return;
+      
+    } catch (err) {
+      console.error('Erro ao processar surpresa:', err);
     }
-    onSave();
   };
 
   return (

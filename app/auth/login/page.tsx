@@ -38,14 +38,21 @@ export default function Login() {
         
         if (tempSurpriseStr && returnUrl.includes('/payment')) {
           try {
-            const tempSurprise = JSON.parse(tempSurpriseStr);
-            console.log('Dados temporários encontrados:', tempSurprise);
-            
-            // Verificar novamente a autenticação antes de criar a surpresa
+            // Verificar novamente a autenticação
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) {
-              throw new Error('Sessão não estabelecida');
+              console.log('Sessão não estabelecida, aguardando...');
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              // Verificar mais uma vez
+              const { data: { session: retrySession } } = await supabase.auth.getSession();
+              if (!retrySession?.user) {
+                throw new Error('Sessão não estabelecida após retry');
+              }
             }
+
+            const tempSurprise = JSON.parse(tempSurpriseStr);
+            console.log('Dados temporários encontrados:', tempSurprise);
             
             // Criar a surpresa com os dados temporários
             const surprise = await createSurprise({
@@ -54,7 +61,7 @@ export default function Login() {
               message: tempSurprise.message,
               youtubeLink: tempSurprise.youtubeLink || '',
               plan: tempSurprise.plan || 'basic',
-              photos: [], // As fotos serão adicionadas depois
+              photos: tempSurprise.photos || [],
               status: 'draft'
             });
 
@@ -112,7 +119,7 @@ export default function Login() {
                   type="email"
                   placeholder="Seu e-mail"
                   value={formData.email}
-                  onChange={(e) => handleInputChange(e, 'email')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'email')}
                   onFocus={() => setFocused('email')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -130,7 +137,7 @@ export default function Login() {
                   type="password"
                   placeholder="Sua senha"
                   value={formData.password}
-                  onChange={(e) => handleInputChange(e, 'password')}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'password')}
                   onFocus={() => setFocused('password')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
