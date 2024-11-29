@@ -19,10 +19,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+    <html lang="pt-BR" className="scroll-smooth">
+      <body className={`${inter.className} overflow-y-scroll min-h-screen`}>
+        <Toaster position="top-right" />
         {children}
-        <Toaster position="top-center" />
       </body>
     </html>
   );

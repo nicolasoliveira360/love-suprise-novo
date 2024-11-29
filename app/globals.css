@@ -2,13 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
+/* Estilização da barra de rolagem para desktop */
+@media (min-width: 768px) {
+  /* Remover regras globais que ocultam a scrollbar */
+  * {
+    -ms-overflow-style: auto !important;
+    scrollbar-width: auto !important;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px !important;
+    display: block !important;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0f131d;
+    border-radius: 20px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #ec4899;
+    border-radius: 20px;
+    border: 2px solid #0f131d;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #f472b6;
+  }
+}
+
+/* Garantir que o conteúdo seja scrollável */
+html {
+  @apply scroll-smooth;
 }
 
 body {
-  background-color: #0a0f1c;
-  color: #ffffff;
+  @apply bg-navy-900 text-white overflow-y-scroll;
+}
+
+/* Remover barra de rolagem apenas no mobile */
+@media (max-width: 767px) {
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+  
+  * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+}
+
+/* Remover regras que ocultam globalmente a scrollbar */
+/* Essas regras estavam causando o conflito */
+/* ::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+} */
+
+/* Resto dos estilos permanecem iguais */
+:root {
+  color-scheme: dark;
 }
 
 .shadow-neon-pink {

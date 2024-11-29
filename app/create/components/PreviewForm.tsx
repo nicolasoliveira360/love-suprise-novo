@@ -71,7 +71,8 @@ export default function PreviewForm({ data, onBack, onSave }: PreviewFormProps) 
         </p>
       </div>
 
-      <div className="space-y-8">
+      {/* Container com largura máxima para desktop */}
+      <div className="max-w-[375px] mx-auto space-y-8">
         {/* Nome do casal e contador */}
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 text-transparent bg-clip-text">
