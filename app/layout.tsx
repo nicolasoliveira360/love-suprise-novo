@@ -20,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className="scroll-smooth">
-      <body className={`${inter.className} overflow-y-scroll min-h-screen`}>
+      <body className={`${inter.className} min-h-screen`} suppressHydrationWarning>
         <Toaster position="top-right" />
         {children}
       </body>

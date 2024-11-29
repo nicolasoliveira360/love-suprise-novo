@@ -1,25 +1,33 @@
 "use client";
 
-import { Fragment, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
+import { Fragment } from 'react';
 import { motion } from 'framer-motion';
-import { XMarkIcon, KeyIcon, UserIcon, AtSymbolIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
 import { useUser } from '@/hooks/useUser';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 
-interface SettingsPanelProps {
+type SettingsPanelProps = {
   isOpen: boolean;
   onClose: () => void;
+};
+
+interface FormData {
+  name: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
 }
 
 export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
-  const { user } = useUser();
-  const [loading, setLoading] = useState(false);
+  const { user, refreshUser } = useUser();
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [formData, setFormData] = useState<FormData>({
     name: '',
-    email: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -30,64 +38,84 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     if (user) {
       setFormData(prev => ({
         ...prev,
-        name: user.name || '',
-        email: user.email || ''
+        name: user.user_metadata?.name || ''
       }));
     }
-  }, [user]);
+  }, [user, isOpen]);
 
-  const handleUpdateProfile = async (e: React.FormEvent) => {
+  const validateForm = () => {
+    // Sempre requer senha atual para qualquer alteração
+    if (!formData.currentPassword) {
+      setError("Digite sua senha atual para confirmar as alterações");
+      return false;
+    }
+
+    // Se estiver alterando a senha, valida a confirmação
+    if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
+      setError("As senhas não coincidem");
+      return false;
+    }
+
+    // Se nenhuma alteração foi feita
+    if (formData.name === user?.user_metadata?.name && !formData.newPassword) {
+      setError("Nenhuma alteração foi feita");
+      return false;
+    }
+
+    setError("");
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
+    
     setLoading(true);
-
     try {
-      // Atualizar nome
-      if (formData.name !== user?.name) {
-        const { error } = await supabase
-          .from('users')
-          .update({ name: formData.name })
-          .eq('id', user?.id);
-          
-        if (error) throw error;
+      // Primeiro verifica a senha atual
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user?.email || '',
+        password: formData.currentPassword
+      });
+
+      if (signInError) {
+        throw new Error("Senha atual incorreta");
+      }
+
+      // Se houver alteração de senha
+      if (formData.newPassword) {
+        const { error: passwordError } = await supabase.auth.updateUser({
+          password: formData.newPassword
+        });
+        if (passwordError) throw passwordError;
+        toast.success('Senha atualizada com sucesso!');
+      }
+
+      // Atualizar nome nos metadados
+      if (formData.name !== user?.user_metadata?.name) {
+        const { error: updateError } = await supabase.auth.updateUser({
+          data: { name: formData.name }
+        });
+        if (updateError) throw updateError;
         toast.success('Nome atualizado com sucesso!');
       }
 
-      // Atualizar email
-      if (formData.email !== user?.email) {
-        const { error } = await supabase.auth.updateUser({
-          email: formData.email
-        });
-        if (error) throw error;
-        toast.success('Email atualizado! Verifique sua caixa de entrada.');
-      }
-
-      // Atualizar senha
-      if (formData.newPassword) {
-        if (formData.newPassword !== formData.confirmPassword) {
-          toast.error('As senhas não coincidem');
-          return;
-        }
-
-        const { error } = await supabase.auth.updateUser({
-          password: formData.newPassword
-        });
-
-        if (error) throw error;
-        toast.success('Senha atualizada com sucesso!');
-        
-        // Limpar campos de senha
-        setFormData(prev => ({
-          ...prev,
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        }));
-      }
-
+      // Atualizar dados do usuário no contexto
+      await refreshUser();
+      
       setIsEditing(false);
-    } catch (error) {
+      // Limpar campos de senha
+      setFormData(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }));
+
+    } catch (error: any) {
       console.error('Erro ao atualizar perfil:', error);
-      toast.error('Erro ao atualizar perfil');
+      setError(error.message || 'Erro ao atualizar perfil. Tente novamente.');
+      toast.error(error.message || 'Erro ao atualizar perfil');
     } finally {
       setLoading(false);
     }
@@ -109,7 +137,7 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -119,126 +147,107 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-navy-800 p-6 shadow-xl transition-all">
-                <div className="flex items-center justify-between mb-6">
-                  <Dialog.Title className="text-lg font-medium">
-                    Configurações
-                  </Dialog.Title>
-                  <div className="flex items-center gap-2">
-                    {!isEditing && (
-                      <button
-                        onClick={() => setIsEditing(true)}
-                        className="p-2 rounded-full hover:bg-navy-700 transition-colors"
-                      >
-                        <PencilIcon className="w-5 h-5 text-pink-500" />
-                      </button>
-                    )}
-                    <button
-                      onClick={onClose}
-                      className="p-2 rounded-full hover:bg-navy-700 transition-colors"
-                    >
-                      <XMarkIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-navy-800 p-6 text-left align-middle shadow-xl transition-all">
+                <Dialog.Title as="div" className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-white">
+                    Configurações da Conta
+                  </h3>
+                  <button
+                    onClick={onClose}
+                    className="p-2 rounded-full hover:bg-navy-700 transition-colors"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-gray-400" />
+                  </button>
+                </Dialog.Title>
 
-                <form onSubmit={handleUpdateProfile} className="space-y-6">
-                  {/* Nome */}
+                {error && (
+                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-500">
+                    <ExclamationCircleIcon className="w-5 h-5 flex-shrink-0" />
+                    <p className="text-sm">{error}</p>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Nome
                     </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <UserIcon className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        disabled={!isEditing}
-                        className="block w-full pl-10 pr-3 py-2 bg-navy-900 border border-gray-700 rounded-lg focus:ring-pink-500 focus:border-pink-500 disabled:opacity-50"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      disabled={!isEditing}
+                      className="w-full px-4 py-2 bg-navy-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-pink-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
                   </div>
 
-                  {/* Email */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Email
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <AtSymbolIcon className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                        disabled={!isEditing}
-                        className="block w-full pl-10 pr-3 py-2 bg-navy-900 border border-gray-700 rounded-lg focus:ring-pink-500 focus:border-pink-500 disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Campos de senha - só aparecem no modo edição */}
                   {isEditing && (
-                    <div className="space-y-4">
+                    <>
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Nova Senha
+                          Senha Atual
                         </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <KeyIcon className="h-5 w-5 text-gray-400" />
-                          </div>
-                          <input
-                            type="password"
-                            value={formData.newPassword}
-                            onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
-                            className="block w-full pl-10 pr-3 py-2 bg-navy-900 border border-gray-700 rounded-lg focus:ring-pink-500 focus:border-pink-500"
-                            placeholder="Digite a nova senha"
-                          />
-                        </div>
+                        <input
+                          type="password"
+                          value={formData.currentPassword}
+                          onChange={(e) => setFormData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                          className="w-full px-4 py-2 bg-navy-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-pink-500"
+                          placeholder="Digite sua senha atual para confirmar as alterações"
+                        />
                       </div>
 
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Confirmar Nova Senha
+                          Nova Senha (opcional)
                         </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <KeyIcon className="h-5 w-5 text-gray-400" />
-                          </div>
+                        <input
+                          type="password"
+                          value={formData.newPassword}
+                          onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
+                          className="w-full px-4 py-2 bg-navy-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-pink-500"
+                          placeholder="Deixe em branco para não alterar"
+                        />
+                      </div>
+
+                      {formData.newPassword && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Confirmar Nova Senha
+                          </label>
                           <input
                             type="password"
                             value={formData.confirmPassword}
                             onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                            className="block w-full pl-10 pr-3 py-2 bg-navy-900 border border-gray-700 rounded-lg focus:ring-pink-500 focus:border-pink-500"
-                            placeholder="Confirme a nova senha"
+                            className="w-full px-4 py-2 bg-navy-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-pink-500"
                           />
                         </div>
-                      </div>
-                    </div>
+                      )}
+                    </>
                   )}
 
-                  {/* Botões */}
-                  {isEditing && (
+                  {!isEditing ? (
+                    <motion.button
+                      type="button"
+                      onClick={() => setIsEditing(true)}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="w-full py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-full font-semibold hover:opacity-90 transition-all shadow-neon-pink"
+                    >
+                      Editar Perfil
+                    </motion.button>
+                  ) : (
                     <div className="flex gap-4">
                       <motion.button
                         type="button"
                         onClick={() => {
                           setIsEditing(false);
-                          // Restaurar dados originais
-                          if (user) {
-                            setFormData(prev => ({
-                              ...prev,
-                              name: user.name || '',
-                              email: user.email || '',
-                              newPassword: '',
-                              confirmPassword: ''
-                            }));
-                          }
+                          setError("");
+                          setFormData({
+                            name: user?.user_metadata?.name || '',
+                            currentPassword: '',
+                            newPassword: '',
+                            confirmPassword: ''
+                          });
                         }}
                         className="flex-1 py-3 bg-navy-900 text-white rounded-full font-semibold border border-gray-700 hover:border-pink-500 transition-all"
                       >

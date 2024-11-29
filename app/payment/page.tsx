@@ -12,6 +12,7 @@ import { Elements } from '@stripe/react-stripe-js';
 import CheckoutForm from './components/CheckoutForm';
 import { PLANS } from '@/constants/plans';
 import type { Surprise } from '@/types';
+import { usePayment } from '@/hooks/usePayment';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY!);
 
@@ -25,6 +26,7 @@ export default function Payment() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const { checkPaymentStatus, setLastPayment } = usePayment();
 
   useEffect(() => {
     let isMounted = true;
@@ -73,6 +75,38 @@ export default function Payment() {
     };
   }, [surpriseId, user]);
 
+  useEffect(() => {
+    const validatePayment = async () => {
+      try {
+        // Recuperar dados da surpresa do localStorage
+        const tempSurpriseData = localStorage.getItem('tempSurprise');
+        if (!tempSurpriseData) {
+          router.push('/create');
+          return;
+        }
+
+        const surpriseData = JSON.parse(tempSurpriseData);
+
+        // Se já existe um ID, verificar status do pagamento
+        if (surpriseData.id) {
+          const isPaid = await checkPaymentStatus(surpriseData.id);
+          if (isPaid) {
+            // Se já foi pago, redirecionar para o dashboard
+            router.push('/dashboard');
+            return;
+          }
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Erro ao validar pagamento:', error);
+        router.push('/create');
+      }
+    };
+
+    validatePayment();
+  }, [router, checkPaymentStatus]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.refresh();
@@ -112,6 +146,8 @@ export default function Payment() {
       }
 
       if (data.sessionId) {
+        // Registrar o pagamento antes do redirecionamento
+        setLastPayment(surpriseId);
         router.push(`/payment/success?session_id=${data.sessionId}&surprise_id=${surpriseId}`);
       } else {
         throw new Error('Sessão de pagamento não criada');
@@ -133,7 +169,7 @@ export default function Payment() {
       <div className="min-h-screen bg-navy-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Carregando...</p>
+          <p className="text-gray-400">Verificando pagamento...</p>
         </div>
       </div>
     );

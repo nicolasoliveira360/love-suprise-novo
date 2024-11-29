@@ -9,38 +9,54 @@ import QRCode from 'qrcode';
 import { useSurprise } from '@/hooks/useSurprise';
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard';
 import Link from 'next/link';
+import QRCodeDownload from '@/components/QRCodeDownload';
+import { usePayment } from '@/hooks/usePayment';
 
 export default function PaymentSuccess() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { checkPaymentStatus, clearLastPayment } = usePayment();
   const [isValidSession, setIsValidSession] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [shareableUrl, setShareableUrl] = useState<string>('');
   const [copied, copyToClipboard] = useCopyToClipboard();
   const { updateSurpriseStatus } = useSurprise();
   const [error, setError] = useState<string | null>(null);
+  const [surpriseId, setSurpriseId] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const validateAndUpdateSession = async () => {
       const sessionId = searchParams.get('session_id');
-      const surpriseId = searchParams.get('surprise_id');
+      const id = searchParams.get('surprise_id');
 
-      if (!sessionId || !surpriseId) {
+      if (!sessionId || !id) {
         router.push('/');
         return;
       }
 
       try {
+        // Verificar se é um pagamento recente
+        const lastPayment = localStorage.getItem('lastPaymentId');
+        const isPaid = await checkPaymentStatus(id);
+
+        // Se já está pago e não é o pagamento mais recente, redirecionar
+        if (isPaid && lastPayment !== id) {
+          router.push('/dashboard');
+          return;
+        }
+
+        setSurpriseId(id);
+
         // Atualizar o status da surpresa para 'active'
-        const success = await updateSurpriseStatus(surpriseId, 'active');
+        const success = await updateSurpriseStatus(id, 'active');
         if (!success) {
           throw new Error('Falha ao atualizar status da surpresa');
         }
         
         // Gerar URL compartilhável
         const baseUrl = window.location.origin;
-        const url = `${baseUrl}/s/${surpriseId}`;
+        const url = `${baseUrl}/s/${id}`;
         setShareableUrl(url);
         
         // Gerar QR Code
@@ -48,6 +64,14 @@ export default function PaymentSuccess() {
         setQrCodeUrl(qrCode);
         
         setIsValidSession(true);
+
+        // Limpar dados temporários após pagamento bem sucedido
+        localStorage.removeItem('tempSurprise');
+        
+        // Limpar o lastPaymentId apenas quando a página for desmontada
+        return () => {
+          clearLastPayment();
+        };
       } catch (error) {
         console.error('Erro ao atualizar status:', error);
         setError(error instanceof Error ? error.message : 'Erro ao processar pagamento');
@@ -56,7 +80,7 @@ export default function PaymentSuccess() {
     };
 
     validateAndUpdateSession();
-  }, [searchParams, router, updateSurpriseStatus]);
+  }, [searchParams, router, updateSurpriseStatus, checkPaymentStatus, clearLastPayment]);
 
   const handleCopyLink = async () => {
     if (!shareableUrl) {
@@ -68,20 +92,8 @@ export default function PaymentSuccess() {
       await copyToClipboard(shareableUrl);
     } catch (err) {
       console.error('Erro ao copiar:', err);
-      // Fallback: Mostrar modal com o link
       alert(`Por favor, copie este link manualmente:\n${shareableUrl}`);
     }
-  };
-
-  const handleDownloadQR = () => {
-    if (!qrCodeUrl) return;
-    
-    const link = document.createElement('a');
-    link.href = qrCodeUrl;
-    link.download = 'qrcode-surpresa.png';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   if (error) {
@@ -130,18 +142,13 @@ export default function PaymentSuccess() {
         </div>
 
         <div className="bg-navy-800 rounded-2xl p-6 space-y-6 shadow-neon-pink">
-          {/* QR Code */}
-          <div className="space-y-4">
-            <div ref={qrRef} className="bg-white p-4 rounded-lg mx-auto w-fit">
-              <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48" />
-            </div>
-            <button
-              onClick={handleDownloadQR}
-              className="text-sm text-pink-500 hover:text-pink-400 transition-colors"
-            >
-              Baixar QR Code
-            </button>
-          </div>
+          {shareableUrl && surpriseId && (
+            <QRCodeDownload 
+              url={shareableUrl} 
+              size={300}
+              id={surpriseId}
+            />
+          )}
 
           {/* Link compartilhável */}
           <div className="space-y-4">
