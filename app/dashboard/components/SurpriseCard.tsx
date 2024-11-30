@@ -4,16 +4,13 @@ import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { 
-  CalendarIcon, 
   ClockIcon, 
   EyeIcon,
   SparklesIcon,
   ExclamationCircleIcon,
   CheckCircleIcon,
   HeartIcon,
-  PencilSquareIcon,
   TrashIcon,
-  EyeDropperIcon,
   ShareIcon,
   EllipsisVerticalIcon,
   CreditCardIcon,
@@ -37,6 +34,13 @@ type SurpriseCardProps = {
   };
   onShare: (id: string) => void;
   onDelete: (id: string) => void;
+};
+
+type MenuItemProps = {
+  children: React.ReactNode;
+  onClick: () => void;
+  className?: string;
+  danger?: boolean;
 };
 
 export default function SurpriseCard({ surprise, onShare, onDelete }: SurpriseCardProps) {
@@ -90,10 +94,6 @@ export default function SurpriseCard({ surprise, onShare, onDelete }: SurpriseCa
     router.push(`/payment?surpriseId=${surprise.id}`);
   };
 
-  const handleEdit = () => {
-    router.push(`/edit/${surprise.id}`);
-  };
-
   const handleDeleteClick = () => {
     setIsDeleteModalOpen(true);
   };
@@ -107,25 +107,23 @@ export default function SurpriseCard({ surprise, onShare, onDelete }: SurpriseCa
     setDeleteConfirmText('');
   };
 
-  const MenuItem = ({ children, onClick, className, danger = false }: {
-    children: React.ReactNode;
-    onClick: () => void;
-    className?: string;
-    danger?: boolean;
-  }) => (
+  const MenuItem = ({ children, onClick, className, danger = false }: MenuItemProps) => (
     <Menu.Item>
-      {({ active }: { active: boolean }) => (
-        <button
-          onClick={onClick}
-          className={`${
-            active ? 'bg-white/5' : ''
-          } flex items-center gap-2 w-full px-4 py-2 text-sm ${
-            danger ? 'text-red-500 hover:text-red-400' : 'text-gray-300 hover:text-white'
-          } transition-colors ${className}`}
-        >
-          {children}
-        </button>
-      )}
+      {({ active }) => {
+        return (
+          <button
+            type="button"
+            onClick={onClick}
+            className={`${
+              active ? 'bg-white/5' : ''
+            } flex items-center gap-2 w-full px-4 py-2 text-sm ${
+              danger ? 'text-red-500 hover:text-red-400' : 'text-gray-300 hover:text-white'
+            } transition-colors ${className || ''}`}
+          >
+            {children}
+          </button>
+        );
+      }}
     </Menu.Item>
   );
 
@@ -152,13 +150,6 @@ export default function SurpriseCard({ surprise, onShare, onDelete }: SurpriseCa
             leaveTo="transform opacity-0 scale-95"
           >
             <Menu.Items className="absolute right-0 mt-2 w-48 bg-navy-900 rounded-lg shadow-lg py-1 border border-gray-700 z-10">
-              {surprise.status !== 'active' && (
-                <MenuItem onClick={handleEdit}>
-                  <PencilSquareIcon className="w-4 h-4" />
-                  Editar
-                </MenuItem>
-              )}
-
               {surprise.status === 'active' && (
                 <MenuItem onClick={() => onShare(surprise.id)}>
                   <ShareIcon className="w-4 h-4" />
@@ -308,7 +299,7 @@ export default function SurpriseCard({ surprise, onShare, onDelete }: SurpriseCa
                       <input
                         type="text"
                         value={deleteConfirmText}
-                        onChange={(e) => setDeleteConfirmText(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDeleteConfirmText(e.target.value)}
                         className="w-full px-4 py-2 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-white"
                         placeholder={surprise.couple_name}
                       />

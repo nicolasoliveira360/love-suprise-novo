@@ -5,7 +5,10 @@ import { CreditCardIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 interface CheckoutFormProps {
-  onSubmit: (paymentMethodId: string) => Promise<void>;
+  onSubmit: {
+    (paymentMethodId: string): Promise<void>;
+    (e: FormEvent<HTMLFormElement>): Promise<void>;
+  };
   isProcessing: boolean;
 }
 

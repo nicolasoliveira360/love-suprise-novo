@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { HeartIcon, SparklesIcon, ArrowRightOnRectangleIcon, CreditCardIcon, CheckIcon, LockClosedIcon } from '@heroicons/react/24/outline';
@@ -17,8 +17,15 @@ import { usePayment } from '@/hooks/usePayment';
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY!);
 
 interface CheckoutFormProps {
-  onSubmit: (paymentMethodId: string) => Promise<void>;
+  onSubmit: {
+    (paymentMethodId: string): Promise<void>;
+    (e: FormEvent<HTMLFormElement>): Promise<void>;
+  };
   isProcessing: boolean;
+}
+
+interface PaymentHandlerProps {
+  paymentMethodId: string;
 }
 
 export default function Payment() {
@@ -140,9 +147,16 @@ export default function Payment() {
     router.refresh();
   };
 
-  const handlePayment = async (paymentMethodId: string): Promise<void> => {
+  const handlePayment = async (paymentMethodIdOrEvent: string | FormEvent<HTMLFormElement>): Promise<void> => {
     try {
       setIsProcessing(true);
+      
+      // Se for um evento de form, ignorar
+      if (typeof paymentMethodIdOrEvent !== 'string') {
+        return;
+      }
+
+      const paymentMethodId = paymentMethodIdOrEvent;
       
       if (!surpriseId || !surprise?.plan || !user?.email || !paymentMethodId) {
         throw new Error('Dados incompletos para processamento');
