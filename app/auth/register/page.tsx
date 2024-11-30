@@ -11,12 +11,20 @@ import { useSurprise } from '@/hooks/useSurprise';
 import { supabase } from '@/lib/supabase';
 import { tempStorage } from '@/utils/storage';
 
+// Define interface for form data
+interface FormData {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
+
 export default function Register() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = searchParams?.get('returnUrl') || '/dashboard';
   const [focused, setFocused] = useState<'name' | 'email' | 'password' | 'confirmPassword' | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
     password: '',
@@ -37,31 +45,38 @@ export default function Register() {
       const data = await signUp(formData.email, formData.password, formData.name);
       
       if (data) {
-        // Aguardar a autenticação ser completamente estabelecida
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Aumentar o tempo de espera inicial para garantir autenticação
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
-        // Se houver uma surpresa temporária e estiver indo para pagamento
         const tempSurpriseStr = localStorage.getItem('tempSurprise');
         
         if (tempSurpriseStr) {
           try {
-            // Verificar novamente a autenticação antes de criar a surpresa
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) {
-              console.log('Sessão não estabelecida, aguardando...');
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-              const { data: { session: retrySession } } = await supabase.auth.getSession();
-              if (!retrySession?.user) {
-                throw new Error('Sessão não estabelecida após retry');
+            // Verificar sessão com retry
+            let session = null;
+            let retryCount = 0;
+            const maxRetries = 3;
+
+            while (!session && retryCount < maxRetries) {
+              const { data: { session: currentSession } } = await supabase.auth.getSession();
+              if (currentSession?.user) {
+                session = currentSession;
+                break;
               }
+              console.log(`Tentativa ${retryCount + 1} de obter sessão...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              retryCount++;
+            }
+
+            if (!session) {
+              throw new Error('Não foi possível estabelecer a sessão');
             }
 
             const tempSurprise = JSON.parse(tempSurpriseStr);
             console.log('Dados temporários encontrados:', tempSurprise);
 
             // Recuperar arquivos do IndexedDB
-            const photos = await tempStorage.getFiles(tempSurprise.fileIds);
+            const photos = await tempStorage.getFiles(tempSurprise.fileIds || []);
             
             const surprise = await createSurprise({
               coupleName: tempSurprise.coupleName,
@@ -69,19 +84,63 @@ export default function Register() {
               message: tempSurprise.message,
               youtubeLink: tempSurprise.youtubeLink || '',
               plan: tempSurprise.plan || 'basic',
-              photos: photos,
+              photos: photos || [],
               status: 'draft'
             });
             
-            if (surprise) {
+            if (surprise?.id) {
               console.log('Surpresa criada com sucesso:', surprise.id);
-              localStorage.removeItem('tempSurprise');
-              await tempStorage.clearAll(); // Limpar arquivos temporários
-              router.push(`/payment?surpriseId=${surprise.id}`);
-              return;
+              
+              // Aguardar um momento antes de limpar os dados e redirecionar
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Verificar se a surpresa realmente existe antes de redirecionar
+              const { data: checkSurprise, error: checkError } = await supabase
+                .from('surprises')
+                .select('id, status')
+                .eq('id', surprise.id)
+                .single();
+                
+              if (checkError) {
+                console.error('Erro ao verificar surpresa:', checkError);
+                throw new Error('Erro ao verificar surpresa');
+              }
+
+              if (checkSurprise) {
+                try {
+                  // Limpar dados apenas após confirmação
+                  localStorage.removeItem('tempSurprise');
+                  await tempStorage.clearAll();
+
+                  // Salvar ID da surpresa em uma storage temporária para verificação
+                  sessionStorage.setItem('lastCreatedSurprise', surprise.id);
+
+                  // Construir URL com parâmetros necessários
+                  const paymentUrl = new URL('/payment', window.location.origin);
+                  paymentUrl.searchParams.set('surpriseId', surprise.id);
+                  
+                  console.log('Redirecionando para:', paymentUrl.toString());
+                  
+                  // Forçar navegação com window.location ao invés do router
+                  window.location.href = paymentUrl.toString();
+                  return;
+                } catch (err) {
+                  console.error('Erro no redirecionamento:', err);
+                  throw new Error('Falha no redirecionamento');
+                }
+              }
+              
+              throw new Error('Surpresa não encontrada após criação');
             }
+            
+            throw new Error('Falha ao criar surpresa');
           } catch (err) {
             console.error('Erro ao criar surpresa após registro:', err);
+            // Adicionar mensagem de erro mais específica
+            const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+            console.error('Detalhes do erro:', errorMessage);
+            
+            // Manter dados temporários em caso de erro
             router.push('/create');
             return;
           }
@@ -94,8 +153,8 @@ export default function Register() {
     }
   };
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>, field: keyof typeof formData) => {
-    setFormData(prev => ({ ...prev, [field]: e.target.value }));
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>, field: keyof FormData) => {
+    setFormData((prev: FormData) => ({ ...prev, [field]: e.target.value }));
   };
 
   return (
@@ -126,7 +185,7 @@ export default function Register() {
                   type="text"
                   placeholder="Seu nome"
                   value={formData.name}
-                  onChange={(e) => handleInputChange(e, 'name')}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'name')}
                   onFocus={() => setFocused('name')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -145,7 +204,7 @@ export default function Register() {
                   type="email"
                   placeholder="Seu e-mail"
                   value={formData.email}
-                  onChange={(e) => handleInputChange(e, 'email')}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'email')}
                   onFocus={() => setFocused('email')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -164,7 +223,7 @@ export default function Register() {
                   type="password"
                   placeholder="Sua senha"
                   value={formData.password}
-                  onChange={(e) => handleInputChange(e, 'password')}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'password')}
                   onFocus={() => setFocused('password')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"
@@ -183,7 +242,7 @@ export default function Register() {
                   type="password"
                   placeholder="Confirme sua senha"
                   value={formData.confirmPassword}
-                  onChange={(e) => handleInputChange(e, 'confirmPassword')}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleInputChange(e, 'confirmPassword')}
                   onFocus={() => setFocused('confirmPassword')}
                   onBlur={() => setFocused(null)}
                   className="w-full pl-12 pr-4 py-3 bg-navy-900 border border-gray-700 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent text-white transition-all"

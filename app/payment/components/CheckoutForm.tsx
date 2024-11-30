@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, ChangeEvent } from 'react';
 import { CreditCardIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
@@ -71,6 +71,10 @@ export default function CheckoutForm({ onSubmit, isProcessing }: CheckoutFormPro
     }
   };
 
+  const handleNameChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setCardholderName(e.target.value);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="bg-navy-800/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-800">
@@ -89,7 +93,7 @@ export default function CheckoutForm({ onSubmit, isProcessing }: CheckoutFormPro
               type="text"
               id="cardholderName"
               value={cardholderName}
-              onChange={(e) => setCardholderName(e.target.value)}
+              onChange={handleNameChange}
               className="w-full px-4 py-3 bg-navy-900/50 border border-gray-700/50 rounded-lg text-white focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
               placeholder="Nome como está no cartão"
               required

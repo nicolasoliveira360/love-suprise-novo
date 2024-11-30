@@ -16,6 +16,11 @@ import { usePayment } from '@/hooks/usePayment';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY!);
 
+interface CheckoutFormProps {
+  onSubmit: (paymentMethodId: string) => Promise<void>;
+  isProcessing: boolean;
+}
+
 export default function Payment() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -78,23 +83,46 @@ export default function Payment() {
   useEffect(() => {
     const validatePayment = async () => {
       try {
-        // Recuperar dados da surpresa do localStorage
-        const tempSurpriseData = localStorage.getItem('tempSurprise');
-        if (!tempSurpriseData) {
+        const params = new URLSearchParams(window.location.search);
+        const surpriseId = params.get('surpriseId');
+        
+        console.log('Validando pagamento para surpriseId:', surpriseId);
+        
+        if (!surpriseId) {
+          console.error('SurpriseId não encontrado na URL');
           router.push('/create');
           return;
         }
 
-        const surpriseData = JSON.parse(tempSurpriseData);
+        // Verificar se é uma surpresa recém-criada
+        const lastCreated = sessionStorage.getItem('lastCreatedSurprise');
+        console.log('Última surpresa criada:', lastCreated);
+        
+        if (lastCreated === surpriseId) {
+          // É uma surpresa nova, continuar com o pagamento
+          sessionStorage.removeItem('lastCreatedSurprise');
+          setLoading(false);
+          return;
+        }
 
-        // Se já existe um ID, verificar status do pagamento
-        if (surpriseData.id) {
-          const isPaid = await checkPaymentStatus(surpriseData.id);
-          if (isPaid) {
-            // Se já foi pago, redirecionar para o dashboard
-            router.push('/dashboard');
-            return;
-          }
+        // Verificar status da surpresa
+        const { data: surprise, error: surpriseError } = await supabase
+          .from('surprises')
+          .select('status')
+          .eq('id', surpriseId)
+          .single();
+
+        if (surpriseError) {
+          console.error('Erro ao verificar surpresa:', surpriseError);
+          router.push('/create');
+          return;
+        }
+
+        console.log('Status da surpresa:', surprise?.status);
+
+        if (!surprise || surprise.status !== 'draft') {
+          router.push('/create');
+          return;
         }
 
         setLoading(false);
@@ -105,14 +133,14 @@ export default function Payment() {
     };
 
     validatePayment();
-  }, [router, checkPaymentStatus]);
+  }, [router]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.refresh();
   };
 
-  const handlePayment = async (paymentMethodId: string) => {
+  const handlePayment = async (paymentMethodId: string): Promise<void> => {
     try {
       setIsProcessing(true);
       
